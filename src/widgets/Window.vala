@@ -104,6 +104,7 @@ public class Terminal.Window : Adw.ApplicationWindow {
 
   private SimpleAction copy_action;
   private Array<ulong> active_terminal_signal_handlers = new Array<ulong> ();
+  private Gtk.CssProvider? window_background_provider = null;
 
   static PreferencesWindow? preferences_window = null;
 
@@ -115,6 +116,7 @@ public class Terminal.Window : Adw.ApplicationWindow {
     var layout_box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
 
     this.tab_view = new Adw.TabView ();
+    this.tab_view.add_css_class ("transparent-bg");
 
     this.tab_bar = new Adw.TabBar () {
       autohide = false,
@@ -265,6 +267,12 @@ public class Terminal.Window : Adw.ApplicationWindow {
     });
     set_css_class (this, "with-borders", settings.window_show_borders);
 
+    this.settings.notify ["opacity"].connect (this.on_window_background_changed);
+    this.theme_provider.notify ["current-theme"].connect (
+      this.on_window_background_changed
+    );
+    this.on_window_background_changed ();
+
     this.tab_view.create_window.connect (() => {
       var w = this.new_window (null, true);
       return w.tab_view;
@@ -355,6 +363,30 @@ public class Terminal.Window : Adw.ApplicationWindow {
       Settings.get_default ().was_maximized = this.maximized;
       return false;
     });
+  }
+
+  private void on_window_background_changed () {
+    if (this.window_background_provider != null) {
+      this.get_style_context ().remove_provider (this.window_background_provider);
+      this.window_background_provider = null;
+    }
+
+    var theme = this.theme_provider.themes.get (this.theme_provider.current_theme);
+    if (theme == null || theme.background_color == null) {
+      return;
+    }
+
+    var bg = theme.background_color.copy ();
+    bg.alpha = this.settings.opacity * 0.01f;
+
+    this.window_background_provider = Marble.get_css_provider_for_data (
+      "#blackbox-main-window { background-color: %s; }".printf (bg.to_string ())
+    );
+
+    this.get_style_context ().add_provider (
+      this.window_background_provider,
+      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    );
   }
 
   private void add_actions () {

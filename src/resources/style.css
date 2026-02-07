@@ -12,12 +12,15 @@ window:not(.about) headerbar:not(.background), .custom-headerbar {
 /* #blackbox-main-window.with-borders:not(.fullscreen):backdrop {
   border-color: alpha(@borders, 0.5);
 } */
-window{
-  background-color: rgba(0, 0, 0, 0.0);
-}
-
 #blackbox-main-window {
   background: transparent;
+}
+
+/* Window background owns opacity; terminal/tab containers stay transparent. */
+#blackbox-main-window .transparent-bg,
+#blackbox-main-window .transparent-bg > stack,
+#blackbox-main-window .transparent-bg > stack > * {
+  background-color: transparent;
 }
 
 #blackbox-main-window.with-borders .custom-headerbar:not(.single-tab-mode) headerbar,

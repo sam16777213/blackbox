@@ -40,15 +40,6 @@ public class Terminal.TerminalTab : Gtk.Box {
     var twig = this.terminal as Gtk.Widget;
     //  this.set_child(twig);
     this.scrolled = new Gtk.ScrolledWindow ();
-    var provider=new Gtk.CssProvider();
-    string css="""
-      .transparent-bg{
-        background-color:rgba(0,0,0,0);
-      }
-    """;
-    var css_bytes=(uint8[]) css.data;
-    provider.load_from_data(css_bytes);
-    //Gtk.StyleContext.add_provider_for_display(this.window.get_display(),provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
     this.scrolled.child = twig;
 
     this.append (this.scrolled);
@@ -66,8 +57,8 @@ public class Terminal.TerminalTab : Gtk.Box {
     this.terminal.add_controller (click);
 
     this.connect_signals ();
-    this.scrolled.add_css_class("transparent-bg");
-    this.terminal.add_css_class("transparent-bg");
+    this.scrolled.add_css_class ("transparent-bg");
+    this.terminal.add_css_class ("transparent-bg");
   }
 
   private void connect_signals () {

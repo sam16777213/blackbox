@@ -68,6 +68,7 @@ public class Terminal.Terminal : Vte.Terminal {
   private uint    original_scrollback_lines;
 
   Settings settings;
+  private GLib.Settings? desktop_interface_settings = null;
 
   public Terminal (Window window, string? command = null, string? cwd = null) {
     Object (
@@ -91,7 +92,7 @@ public class Terminal.Terminal : Vte.Terminal {
     ThemeProvider.get_default ().notify ["current-theme"].connect (this.on_theme_changed);
     this.settings.notify["font"].connect (this.on_font_changed);
     this.settings.notify["terminal-padding"].connect (this.on_padding_changed);
-    this.settings.notify["opacity"].connect (this.on_theme_changed);
+    this.setup_system_font_options_sync ();
     
     this.setup_drag_drop ();
     this.setup_regexes ();
@@ -99,6 +100,7 @@ public class Terminal.Terminal : Vte.Terminal {
     this.bind_data ();
     this.on_theme_changed ();
     this.on_font_changed ();
+    this.apply_system_font_options ();
     this.on_padding_changed ();
 
     try {
@@ -187,14 +189,126 @@ public class Terminal.Terminal : Vte.Terminal {
     this.font_desc = Pango.FontDescription.from_string (
       this.settings.font
     );
+
+    this.apply_system_font_options ();
   }
 
-  private Gtk.CssProvider? bg_styling_provider = null;
-  private Gdk.RGBA get_background_color(Scheme theme) {
-    var bg_transparent = theme.background_color.copy();
-    bg_transparent.alpha = this.settings.opacity * 0.01f;
-    //message (bg_transparent?.to_string());
-    return bg_transparent;
+  private bool is_font_rendering_related_key (string key) {
+    return (
+      key == "font-antialiasing" ||
+      key == "font-hinting" ||
+      key == "font-rgba-order" ||
+      key == "font-rendering" ||
+      key == "text-scaling-factor"
+    );
+  }
+
+  private void setup_system_font_options_sync () {
+    var schema_source = SettingsSchemaSource.get_default ();
+    if (schema_source != null) {
+      var schema = schema_source.lookup ("org.gnome.desktop.interface", true);
+      if (schema != null) {
+        this.desktop_interface_settings = new GLib.Settings (
+          "org.gnome.desktop.interface"
+        );
+
+        this.desktop_interface_settings.changed.connect ((key) => {
+          if (this.is_font_rendering_related_key (key)) {
+            this.apply_system_font_options ();
+          }
+        });
+      }
+    }
+
+    var gtk_settings = Gtk.Settings.get_default ();
+    gtk_settings.notify["gtk-xft-antialias"].connect (this.apply_system_font_options);
+    gtk_settings.notify["gtk-xft-hinting"].connect (this.apply_system_font_options);
+    gtk_settings.notify["gtk-xft-hintstyle"].connect (this.apply_system_font_options);
+    gtk_settings.notify["gtk-xft-rgba"].connect (this.apply_system_font_options);
+    gtk_settings.notify["gtk-xft-dpi"].connect (this.apply_system_font_options);
+  }
+
+  private void apply_system_font_options () {
+    var gtk_settings = Gtk.Settings.get_default ();
+    if (gtk_settings == null) {
+      return;
+    }
+
+    var antialias = gtk_settings.gtk_xft_antialias;
+    var hinting = gtk_settings.gtk_xft_hinting;
+    var hintstyle = gtk_settings.gtk_xft_hintstyle ?? "";
+    var rgba = gtk_settings.gtk_xft_rgba ?? "";
+
+    var options = new Cairo.FontOptions ();
+    var rgba_key = rgba.down ();
+    var hintstyle_key = hintstyle.down ();
+
+    if (antialias <= 0) {
+      options.set_antialias (Cairo.Antialias.NONE);
+    }
+    else if (rgba_key != "" && rgba_key != "none") {
+      options.set_antialias (Cairo.Antialias.SUBPIXEL);
+    }
+    else {
+      options.set_antialias (Cairo.Antialias.GRAY);
+    }
+
+    if (hinting <= 0) {
+      options.set_hint_style (Cairo.HintStyle.NONE);
+      options.set_hint_metrics (Cairo.HintMetrics.OFF);
+    }
+    else {
+      switch (hintstyle_key) {
+        case "none":
+        case "hintnone":
+          options.set_hint_style (Cairo.HintStyle.NONE);
+          break;
+        case "slight":
+        case "hintslight":
+          options.set_hint_style (Cairo.HintStyle.SLIGHT);
+          break;
+        case "medium":
+        case "hintmedium":
+          options.set_hint_style (Cairo.HintStyle.MEDIUM);
+          break;
+        case "full":
+        case "hintfull":
+          options.set_hint_style (Cairo.HintStyle.FULL);
+          break;
+        default:
+          options.set_hint_style (Cairo.HintStyle.DEFAULT);
+          break;
+      }
+
+      options.set_hint_metrics (Cairo.HintMetrics.ON);
+    }
+
+    switch (rgba_key) {
+      case "rgb":
+        options.set_subpixel_order (Cairo.SubpixelOrder.RGB);
+        break;
+      case "bgr":
+        options.set_subpixel_order (Cairo.SubpixelOrder.BGR);
+        break;
+      case "vrgb":
+        options.set_subpixel_order (Cairo.SubpixelOrder.VRGB);
+        break;
+      case "vbgr":
+        options.set_subpixel_order (Cairo.SubpixelOrder.VBGR);
+        break;
+      default:
+        options.set_subpixel_order (Cairo.SubpixelOrder.DEFAULT);
+        break;
+    }
+
+    this.set_font_options (options);
+  }
+
+  private Gdk.RGBA get_background_color (Scheme theme) {
+    var bg = theme.background_color.copy ();
+    // The main window owns opacity. Keep terminal background transparent.
+    bg.alpha = 0.0f;
+    return bg;
   }
 
   private void on_theme_changed () {
@@ -207,24 +321,17 @@ public class Terminal.Terminal : Vte.Terminal {
       return;
     }
 
+    var fg = theme.foreground_color.copy ();
     var bg = this.get_background_color (theme);
 
+    // Keep foreground fully opaque. Only background should track opacity.
+    fg.alpha = 1.0f;
+
     this.set_colors (
-      theme.foreground_color,
+      fg,
       bg,
       theme.palette.data
     );
-    if(this.bg_styling_provider!=null){
-      this.get_style_context().remove_provider(this.bg_styling_provider);
-      this.bg_styling_provider=null;
-    }
-    this.bg_styling_provider   =Marble.get_css_provider_for_data("""
-                                                                 vte-terminal {
-                                                                   background-color:rgba(%.2f,%.2f,%.2f,%.2f);}
-                                                                 """.printf(bg.red,bg.green,bg.blue,bg.alpha)
-                                                                 );
-    this.get_style_context().add_provider(this.bg_styling_provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION);
-
   }
 
   private Gtk.CssProvider? padding_provider = null;
@@ -545,4 +652,3 @@ public class Terminal.Terminal : Vte.Terminal {
     }
   }
 }
-
