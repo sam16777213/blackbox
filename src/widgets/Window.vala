@@ -113,9 +113,19 @@ public class Terminal.Window : Adw.ApplicationWindow {
       this.add_css_class ("devel");
     }
 
-    var layout_box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
+    var layout_box = new Gtk.Box (Gtk.Orientation.VERTICAL, 0) {
+      hexpand = true,
+      vexpand = true,
+      halign = Gtk.Align.FILL,
+      valign = Gtk.Align.FILL,
+    };
 
-    this.tab_view = new Adw.TabView ();
+    this.tab_view = new Adw.TabView () {
+      hexpand = true,
+      vexpand = true,
+      halign = Gtk.Align.FILL,
+      valign = Gtk.Align.FILL,
+    };
     this.tab_view.add_css_class ("transparent-bg");
 
     this.tab_bar = new Adw.TabBar () {
@@ -184,7 +194,14 @@ public class Terminal.Window : Adw.ApplicationWindow {
     layout_box.append (this.header_bar_revealer);
     layout_box.append (this.tab_view);
 
-    var overlay = new Gtk.Overlay ();
+    var overlay = new Gtk.Overlay () {
+      hexpand = true,
+      vexpand = true,
+      halign = Gtk.Align.FILL,
+      valign = Gtk.Align.FILL,
+      overflow = Gtk.Overflow.HIDDEN
+    };
+    overlay.add_css_class ("window-content-clip");
     overlay.child = layout_box;
     overlay.add_overlay (this.floating_header_bar_revealer);
 
@@ -379,8 +396,17 @@ public class Terminal.Window : Adw.ApplicationWindow {
     var bg = theme.background_color.copy ();
     bg.alpha = this.settings.opacity * 0.01f;
 
+    var border = bg.copy ();
+    var fg = theme.foreground_color.copy ();
+    border.red = border.red * 0.8f + fg.red * 0.2f;
+    border.green = border.green * 0.8f + fg.green * 0.2f;
+    border.blue = border.blue * 0.8f + fg.blue * 0.2f;
+
     this.window_background_provider = Marble.get_css_provider_for_data (
-      "#blackbox-main-window { background-color: %s; }".printf (bg.to_string ())
+      """
+      #blackbox-main-window { background-color: %s; }
+      #blackbox-main-window.with-borders:not(.fullscreen) { border-color: %s; }
+      """.printf (bg.to_string (), border.to_string ())
     );
 
     this.get_style_context ().add_provider (

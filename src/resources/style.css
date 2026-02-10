@@ -7,6 +7,7 @@ window:not(.about) headerbar:not(.background), .custom-headerbar {
 
 #blackbox-main-window.with-borders:not(.fullscreen) {
   border: 1px solid @borders;
+  border-radius: 12px;
 }
 
 /* #blackbox-main-window.with-borders:not(.fullscreen):backdrop {
@@ -14,6 +15,24 @@ window:not(.about) headerbar:not(.background), .custom-headerbar {
 } */
 #blackbox-main-window {
   background: transparent;
+  border-radius: 12px;
+}
+
+/* Active window highlight */
+#blackbox-main-window:not(:backdrop) {
+  border-color: #42f5cb;
+  box-shadow: 0px 0px 20px #23453d;
+}
+
+/* libadwaita sets window.csd.ssd-frame bottom radius to 0; keep BlackBox rounded. */
+#blackbox-main-window.ssd-frame,
+#blackbox-main-window.csd.ssd-frame {
+  border-radius: 12px;
+}
+
+/* Clip app content to the window rounded shape so children don't square corners. */
+#blackbox-main-window .window-content-clip {
+  border-radius: 12px;
 }
 
 /* Window background owns opacity; terminal/tab containers stay transparent. */
@@ -21,6 +40,21 @@ window:not(.about) headerbar:not(.background), .custom-headerbar {
 #blackbox-main-window .transparent-bg > stack,
 #blackbox-main-window .transparent-bg > stack > * {
   background-color: transparent;
+}
+
+/* Keep scrolled internals transparent to avoid opaque strips at the edges. */
+#blackbox-main-window scrolledwindow.transparent-bg,
+#blackbox-main-window scrolledwindow.transparent-bg > viewport {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* Keep any horizontal scrollbar visuals transparent if shown. */
+#blackbox-main-window scrolledwindow.transparent-bg scrollbar.horizontal,
+#blackbox-main-window scrolledwindow.transparent-bg scrollbar.horizontal > range,
+#blackbox-main-window scrolledwindow.transparent-bg scrollbar.horizontal > range > trough {
+  background-color: transparent;
+  background-image: none;
 }
 
 #blackbox-main-window.with-borders .custom-headerbar:not(.single-tab-mode) headerbar,

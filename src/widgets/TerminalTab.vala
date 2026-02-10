@@ -30,22 +30,38 @@ public class Terminal.TerminalTab : Gtk.Box {
   public TerminalTab (Window window, string? command, string? cwd) {
     Object (
       orientation: Gtk.Orientation.VERTICAL,
-      spacing: 0
+      spacing: 0,
+      hexpand: true,
+      vexpand: true,
+      halign: Gtk.Align.FILL,
+      valign: Gtk.Align.FILL
     );
 
     this.window = window;
     this.terminal = new Terminal (this.window, command, cwd);
+    this.add_css_class ("transparent-bg");
 
     // Hack to stop vala-language-server from complaining
     var twig = this.terminal as Gtk.Widget;
     //  this.set_child(twig);
-    this.scrolled = new Gtk.ScrolledWindow ();
+    this.scrolled = new Gtk.ScrolledWindow () {
+      hexpand = true,
+      vexpand = true,
+      halign = Gtk.Align.FILL,
+      valign = Gtk.Align.FILL,
+      hscrollbar_policy = Gtk.PolicyType.NEVER,
+      vscrollbar_policy = Gtk.PolicyType.AUTOMATIC
+    };
     this.scrolled.child = twig;
 
     this.append (this.scrolled);
     twig.grab_focus ();
 
-    this.search_toolbar = new SearchToolbar (this.terminal);
+    this.search_toolbar = new SearchToolbar (this.terminal) {
+      hexpand = true,
+      halign = Gtk.Align.FILL,
+      valign = Gtk.Align.END
+    };
     this.append (this.search_toolbar);
 
     var click = new Gtk.GestureClick () {
@@ -79,12 +95,12 @@ public class Terminal.TerminalTab : Gtk.Box {
       if (show_scrollbars && !is_scrollbar_being_used) {
         this.remove (this.terminal);
         this.scrolled.child = this.terminal;
-        this.append (this.scrolled);
+        this.prepend (this.scrolled);
       }
       else if (!show_scrollbars && is_scrollbar_being_used) {
         this.remove (this.scrolled);
         this.scrolled.child = null;
-        this.append (this.terminal);
+        this.prepend (this.terminal);
       }
     });
     settings.notify_property ("show-scrollbars");

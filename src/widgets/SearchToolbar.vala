@@ -36,6 +36,7 @@ public class Terminal.SearchToolbar : Gtk.Widget {
     Object (terminal: terminal);
 
     this.set_layout_manager (new Gtk.BinLayout ());
+    this.visible = false;
 
     this.search_entry.set_key_capture_widget (this);
 
@@ -44,6 +45,7 @@ public class Terminal.SearchToolbar : Gtk.Widget {
   }
 
   public void open () {
+    this.visible = true;
     this.revealer.reveal_child = true;
     this.search_entry.grab_focus ();
 
@@ -58,6 +60,7 @@ public class Terminal.SearchToolbar : Gtk.Widget {
 
   public void close () {
     this.revealer.reveal_child = false;
+    this.visible = false;
     this.search_entry.text = "";
     this.terminal.unselect_all ();
     this.terminal.match_remove_all ();

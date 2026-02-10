@@ -229,8 +229,25 @@ public class Terminal.Terminal : Vte.Terminal {
       bg,
       theme.palette.data
     );
+
+    // Keep VTE's own background node transparent (including padding area).
+    if (this.bg_styling_provider != null) {
+      this.get_style_context ().remove_provider (this.bg_styling_provider);
+      this.bg_styling_provider = null;
+    }
+
+    var css_bg = theme.background_color.copy ();
+    css_bg.alpha = 0.0f;
+    this.bg_styling_provider = Marble.get_css_provider_for_data (
+      "vte-terminal { background-color: %s; }".printf (css_bg.to_string ())
+    );
+    this.get_style_context ().add_provider (
+      this.bg_styling_provider,
+      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+    );
   }
 
+  private Gtk.CssProvider? bg_styling_provider = null;
   private Gtk.CssProvider? padding_provider = null;
   private void on_padding_changed () {
     var pad = this.settings.get_padding ();
