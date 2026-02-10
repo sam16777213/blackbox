@@ -396,17 +396,10 @@ public class Terminal.Window : Adw.ApplicationWindow {
     var bg = theme.background_color.copy ();
     bg.alpha = this.settings.opacity * 0.01f;
 
-    var border = bg.copy ();
-    var fg = theme.foreground_color.copy ();
-    border.red = border.red * 0.8f + fg.red * 0.2f;
-    border.green = border.green * 0.8f + fg.green * 0.2f;
-    border.blue = border.blue * 0.8f + fg.blue * 0.2f;
-
     this.window_background_provider = Marble.get_css_provider_for_data (
       """
       #blackbox-main-window { background-color: %s; }
-      #blackbox-main-window.with-borders:not(.fullscreen) { border-color: %s; }
-      """.printf (bg.to_string (), border.to_string ())
+      """.printf (bg.to_string ())
     );
 
     this.get_style_context ().add_provider (

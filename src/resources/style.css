@@ -6,22 +6,23 @@ window:not(.about) headerbar:not(.background), .custom-headerbar {
 }
 
 #blackbox-main-window.with-borders:not(.fullscreen) {
-  border: 1px solid @borders;
+  border: 1px solid alpha(@borders, 0.9);
   border-radius: 12px;
 }
 
-/* #blackbox-main-window.with-borders:not(.fullscreen):backdrop {
-  border-color: alpha(@borders, 0.5);
-} */
 #blackbox-main-window {
   background: transparent;
   border-radius: 12px;
 }
 
 /* Active window highlight */
-#blackbox-main-window:not(:backdrop) {
-  border-color: #42f5cb;
+#blackbox-main-window.with-borders:not(.fullscreen):not(:backdrop) {
+  border-color: #87d7af;
   box-shadow: 0px 0px 20px #23453d;
+}
+
+#blackbox-main-window.with-borders:not(.fullscreen):backdrop {
+  border-color: alpha(@borders, 0.9);
 }
 
 /* libadwaita sets window.csd.ssd-frame bottom radius to 0; keep BlackBox rounded. */
