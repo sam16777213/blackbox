@@ -1,5 +1,5 @@
 <div align="center">
-  <h1><img src="./data/icons/hicolor/scalable/apps/com.raggesilver.BlackBox.svg" height="64"/>Black Box</h1>
+  <h1><img src="./data/icons/hicolor/scalable/apps/com.raggesilver.BlackBox.svg" height="64"/>Black Box (Custom edition)</h1>
   <h4>A beautiful GTK 4 terminal.</h4>
   <p>
     <a href="#features">Features</a> •
@@ -18,10 +18,11 @@
   <br/><br/>
 </div>
 
+
 > This is work in progress. Feel free to use Black Box and report any bugs you
 > find.
 
-I created this project so that I could use a decent-looking terminal app on
+I forked from [yonasBSD](https://github.com/yonasBSD/blackbox-terminal) this project so that I could use a decent-looking terminal app on gtk3 
 Linux. There are more featureful alternatives out there.
 
 ## Features
