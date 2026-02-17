@@ -1,1 +1,7 @@
 option('devel', type: 'boolean', value: false)
+option(
+  'static-link',
+  type: 'boolean',
+  value: false,
+  description: 'Attempt a fully static link for blackbox and dependencies'
+)

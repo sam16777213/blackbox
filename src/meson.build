@@ -37,20 +37,26 @@ config_header = configure_file(
 #   dependency('graphene-gobject-1.0', version: '>= 1.11'),
 # ]
 
+static_link = get_option('static-link')
+link_args = []
+if static_link
+  link_args += ['-static']
+endif
+
 blackbox_deps = [
-  dependency('gio-2.0', version: '>= 2.50'),
-  dependency('gtk4', version: '>= 4.6.2'),
+  dependency('gio-2.0', version: '>= 2.50', static: static_link),
+  dependency('gtk4', version: '>= 4.6.2', static: static_link),
   # Black Box actually depends on libadwaita >= 1.2.alpha, but I'm keeping this
   # at 1.1 to make it easier for translators to work on Black Box
-  dependency('libadwaita-1', version: '>= 1.1'),
+  dependency('libadwaita-1', version: '>= 1.1', static: static_link),
   #dependency('marble', version: '>= 42'),
-  dependency('vte-2.91-gtk4', version: '>= 0.69.0'),
-  dependency('json-glib-1.0', version: '>= 1.4.4'),
-  dependency('libpcre2-8'),
-  dependency('libxml-2.0', version: '>= 2.9.12'),
-  dependency('librsvg-2.0', version: '>= 2.54.0'),
-  dependency('gee-0.8', version: '>=0.20'),
-  dependency('graphene-gobject-1.0'),
+  dependency('vte-2.91-gtk4', version: '>= 0.69.0', static: static_link),
+  dependency('json-glib-1.0', version: '>= 1.4.4', static: static_link),
+  dependency('libpcre2-8', static: static_link),
+  dependency('libxml-2.0', version: '>= 2.9.12', static: static_link),
+  dependency('librsvg-2.0', version: '>= 2.54.0', static: static_link),
+  dependency('gee-0.8', version: '>=0.20', static: static_link),
+  dependency('graphene-gobject-1.0', static: static_link),
 ]
 
 # https://github.com/elementary/terminal/blob/d9620eb12331a28c658f97ac9a1bdb809aa90089/meson.build
@@ -70,6 +76,7 @@ blackbox_sources += gnome.compile_resources('blackbox-resources',
 
 executable('blackbox', blackbox_sources, config_header,
   vala_args: '--target-glib=2.50',  dependencies: blackbox_deps,
+  link_args: link_args,
   install: true,
 )
 
