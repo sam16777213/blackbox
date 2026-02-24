@@ -213,6 +213,17 @@
       <object class="AdwPreferencesPage">
         <property name="title" translatable="yes">Terminal</property>
         <property name="icon-name">utilities-terminal-symbolic</property>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Profile</property>
+            <child>
+              <object class="AdwComboRow" id="terminal_active_profile_combo_row">
+                <property name="title" translatable="yes">Active Profile</property>
+                <property name="subtitle" translatable="yes">Terminal and keyboard changes apply to the active tab profile.</property>
+              </object>
+            </child>
+          </object>
+        </child>
         <!-- Text section -->
         <child>
           <object class="AdwPreferencesGroup">
@@ -515,6 +526,94 @@
                     <property name="max-children-per-line">4</property>
                     <property name="selection-mode">none</property>
                     <property name="homogeneous">True</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    <child>
+      <object class="AdwPreferencesPage">
+        <property name="title" translatable="yes">Profiles</property>
+        <property name="icon-name">avatar-default-symbolic</property>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Active Profile</property>
+            <child>
+              <object class="AdwComboRow" id="profiles_active_profile_combo_row">
+                <property name="title" translatable="yes">Active Profile</property>
+                <property name="subtitle" translatable="yes">Switch profile for the active tab.</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Manage Profiles</property>
+            <child>
+              <object class="AdwComboRow" id="profiles_selected_profile_combo_row">
+                <property name="title" translatable="yes">Selected Profile</property>
+                <property name="subtitle" translatable="yes">Choose which profile to rename or delete.</property>
+              </object>
+            </child>
+            <child>
+              <object class="AdwEntryRow" id="profile_name_entry_row">
+                <property name="title" translatable="yes">Profile Name</property>
+              </object>
+            </child>
+            <child>
+              <object class="AdwActionRow">
+                <property name="title" translatable="yes">Create Profile</property>
+                <property name="subtitle" translatable="yes">Create from current active profile settings.</property>
+                <child>
+                  <object class="GtkButton">
+                    <property name="label" translatable="yes">Create</property>
+                    <property name="valign">center</property>
+                    <signal name="clicked" handler="on_create_profile_clicked" swapped="no" />
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="AdwActionRow">
+                <property name="title" translatable="yes">Rename Selected Profile</property>
+                <property name="subtitle" translatable="yes">Use the profile name above.</property>
+                <child>
+                  <object class="GtkButton">
+                    <property name="label" translatable="yes">Rename</property>
+                    <property name="valign">center</property>
+                    <signal name="clicked" handler="on_rename_profile_clicked" swapped="no" />
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="AdwActionRow">
+                <property name="title" translatable="yes">Delete Selected Profile</property>
+                <property name="subtitle" translatable="yes">At least one profile must remain.</property>
+                <child>
+                  <object class="GtkButton">
+                    <property name="label" translatable="yes">Delete</property>
+                    <property name="valign">center</property>
+                    <signal name="clicked" handler="on_delete_profile_clicked" swapped="no" />
+                    <style>
+                      <class name="destructive-action" />
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="AdwActionRow">
+                <property name="title" translatable="yes">Import Tilix Profiles</property>
+                <property name="subtitle" translatable="yes">Migrate profiles from Tilix if available.</property>
+                <child>
+                  <object class="GtkButton">
+                    <property name="label" translatable="yes">Import</property>
+                    <property name="valign">center</property>
+                    <signal name="clicked" handler="on_import_tilix_profiles_clicked" swapped="no" />
                   </object>
                 </child>
               </object>

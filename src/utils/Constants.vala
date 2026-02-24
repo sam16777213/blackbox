@@ -35,15 +35,35 @@ namespace Terminal.Constants {
 
   const string COPYING_NOT_IMPLEMENTED_WARNING_FMT = _("%s uses an early Gtk 4 port of VTE as a terminal widget. While a lot of progress has been made on this port, copying has yet to be implemented. This means there's currently no way to copy text in %s.");
 
+  public string get_user_data_dir () {
+    return Path.build_path (
+      Path.DIR_SEPARATOR_S,
+      Environment.get_user_data_dir (),
+      "blackbox"
+    );
+  }
+
   public string get_user_schemes_dir () {
-    return Path.build_path(
-      Path.DIR_SEPARATOR_S, Environment.get_user_data_dir (), "blackbox", "schemes"
+    return Path.build_path (
+      Path.DIR_SEPARATOR_S,
+      get_user_data_dir (),
+      "schemes"
     );
   }
 
   public string get_user_keybindings_path () {
-    return Path.build_path(
-      Path.DIR_SEPARATOR_S, Environment.get_user_data_dir (), "blackbox", "user-keymap.json"
+    return Path.build_path (
+      Path.DIR_SEPARATOR_S,
+      get_user_data_dir (),
+      "user-keymap.json"
+    );
+  }
+
+  public string get_user_profiles_path () {
+    return Path.build_path (
+      Path.DIR_SEPARATOR_S,
+      get_user_data_dir (),
+      "profiles.json"
     );
   }
 

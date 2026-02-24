@@ -69,7 +69,7 @@ public class Terminal.Settings : PQMarble.Settings {
   }
 
   public Padding get_padding () {
-    return Padding.from_variant (this.terminal_padding);
+    return Padding.from_variant (this.schema.get_value ("terminal-padding"));
   }
 
   public void set_padding (Padding padding) {

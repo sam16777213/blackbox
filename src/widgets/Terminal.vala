@@ -56,8 +56,16 @@ public class Terminal.Terminal : Vte.Terminal {
     get {
       var settings = Settings.get_default ();
 
-      return settings.use_custom_scrollback
-        ? settings.scrollback_lines
+      bool use_custom_scrollback = this.profile_overrides_enabled
+        ? this.profile_use_custom_scrollback
+        : settings.use_custom_scrollback;
+
+      uint scrollback_lines = this.profile_overrides_enabled
+        ? this.profile_scrollback_lines
+        : settings.scrollback_lines;
+
+      return use_custom_scrollback
+        ? scrollback_lines
         : this.original_scrollback_lines;
     }
   }
@@ -68,8 +76,25 @@ public class Terminal.Terminal : Vte.Terminal {
   private uint    original_scrollback_lines;
 
   Settings settings;
+  private bool profile_overrides_enabled = false;
+  private bool profile_bindings_detached = false;
+  private string profile_font = "";
+  private bool profile_easy_copy_paste = false;
+  private bool profile_use_custom_scrollback = false;
+  private uint profile_scrollback_lines = 0;
+  private bool profile_command_as_login_shell = true;
+  private bool profile_use_custom_command = false;
+  private string profile_custom_shell_command = "";
+  private string profile_theme_light = "";
+  private string profile_theme_dark = "";
+  private Padding profile_padding = Padding.zero ();
 
-  public Terminal (Window window, string? command = null, string? cwd = null) {
+  public Terminal (
+    Window window,
+    string? command = null,
+    string? cwd = null,
+    Profile? profile = null
+  ) {
     Object (
       allow_hyperlink: true,
       receives_default: true,
@@ -89,6 +114,7 @@ public class Terminal.Terminal : Vte.Terminal {
 
     this.settings = Settings.get_default ();
     ThemeProvider.get_default ().notify ["current-theme"].connect (this.on_theme_changed);
+    Adw.StyleManager.get_default ().notify["dark"].connect (this.on_theme_changed);
     this.settings.notify["font"].connect (this.on_font_changed);
     this.settings.notify["terminal-padding"].connect (this.on_padding_changed);
     this.settings.notify["opacity"].connect (this.on_theme_changed);
@@ -97,10 +123,15 @@ public class Terminal.Terminal : Vte.Terminal {
     this.setup_regexes ();
     this.connect_signals ();
     this.bind_data ();
-    this.on_theme_changed ();
-    this.apply_crisp_font_options ();
-    this.on_font_changed ();
-    this.on_padding_changed ();
+    if (profile != null) {
+      this.apply_profile_overrides (profile);
+    }
+    else {
+      this.on_theme_changed ();
+      this.apply_crisp_font_options ();
+      this.on_font_changed ();
+      this.on_padding_changed ();
+    }
 
     try {
       this.spawn (command, cwd);
@@ -185,8 +216,12 @@ public class Terminal.Terminal : Vte.Terminal {
   }
 
   private void on_font_changed () {
+    var font = this.profile_overrides_enabled
+      ? this.profile_font
+      : this.settings.font;
+
     this.font_desc = Pango.FontDescription.from_string (
-      this.settings.font
+      font
     );
 
     // Keep glyph rendering on full-pixel hinting and grayscale AA.
@@ -211,11 +246,22 @@ public class Terminal.Terminal : Vte.Terminal {
   private void on_theme_changed () {
     var theme_provider = ThemeProvider.get_default ();
     var theme_name = theme_provider.current_theme;
+
+    if (this.profile_overrides_enabled) {
+      var style_manager = Adw.StyleManager.get_default ();
+      theme_name = style_manager.dark
+        ? this.profile_theme_dark
+        : this.profile_theme_light;
+    }
+
     var theme = theme_provider.themes.get (theme_name);
 
     if (theme == null) {
-      warning ("INVALID THEME '%s'", theme_name);
-      return;
+      theme = theme_provider.themes.get (theme_provider.current_theme);
+      if (theme == null) {
+        warning ("INVALID THEME '%s'", theme_name);
+        return;
+      }
     }
 
     var fg = theme.foreground_color.copy ();
@@ -250,7 +296,9 @@ public class Terminal.Terminal : Vte.Terminal {
   private Gtk.CssProvider? bg_styling_provider = null;
   private Gtk.CssProvider? padding_provider = null;
   private void on_padding_changed () {
-    var pad = this.settings.get_padding ();
+    var pad = this.profile_overrides_enabled
+      ? this.profile_padding
+      : this.settings.get_padding ();
 
     if (this.padding_provider != null) {
       this.get_style_context ().remove_provider (this.padding_provider);
@@ -270,6 +318,51 @@ public class Terminal.Terminal : Vte.Terminal {
       this.padding_provider,
       Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
     );
+  }
+
+  private void detach_profile_related_settings_bindings () {
+    if (this.profile_bindings_detached) {
+      return;
+    }
+
+    GLib.Settings.unbind (this, "cell-width-scale");
+    GLib.Settings.unbind (this, "cell-height-scale");
+    GLib.Settings.unbind (this, "cursor-shape");
+    GLib.Settings.unbind (this, "cursor-blink-mode");
+    GLib.Settings.unbind (this, "enable-fallback-scrolling");
+    this.profile_bindings_detached = true;
+  }
+
+  public void apply_profile_overrides (Profile profile) {
+    this.detach_profile_related_settings_bindings ();
+    this.profile_overrides_enabled = true;
+
+    this.profile_font = profile.font;
+    this.profile_easy_copy_paste = profile.easy_copy_paste;
+    this.profile_use_custom_scrollback = profile.use_custom_scrollback;
+    this.profile_scrollback_lines = profile.scrollback_lines;
+    this.profile_command_as_login_shell = profile.command_as_login_shell;
+    this.profile_use_custom_command = profile.use_custom_command;
+    this.profile_custom_shell_command = profile.custom_shell_command;
+    this.profile_theme_light = profile.theme_light;
+    this.profile_theme_dark = profile.theme_dark;
+    this.profile_padding = Padding () {
+      top = profile.padding_top,
+      right = profile.padding_right,
+      bottom = profile.padding_bottom,
+      left = profile.padding_left,
+    };
+
+    this.cell_width_scale = profile.terminal_cell_width;
+    this.cell_height_scale = profile.terminal_cell_height;
+    this.cursor_shape = (Vte.CursorShape) profile.cursor_shape;
+    this.cursor_blink_mode = (Vte.CursorBlinkMode) profile.cursor_blink_mode;
+    this.enable_fallback_scrolling = !profile.show_scrollbars;
+
+    this.notify_property ("user-scrollback-lines");
+    this.on_font_changed ();
+    this.on_padding_changed ();
+    this.on_theme_changed ();
   }
 
   private void bind_data () {
@@ -373,14 +466,20 @@ public class Terminal.Terminal : Vte.Terminal {
 
     var settings = Settings.get_default ();
     string[]? custom_shell_commandv = null;
+    bool use_custom_command = this.profile_overrides_enabled
+      ? this.profile_use_custom_command
+      : settings.use_custom_command;
+    string custom_shell_command = this.profile_overrides_enabled
+      ? this.profile_custom_shell_command
+      : settings.custom_shell_command;
+    bool command_as_login_shell = this.profile_overrides_enabled
+      ? this.profile_command_as_login_shell
+      : settings.command_as_login_shell;
 
     string shell;
 
-    if (
-      settings.use_custom_command &&
-      settings.custom_shell_command != ""
-    ) {
-      Shell.parse_argv (settings.custom_shell_command, out custom_shell_commandv);
+    if (use_custom_command && custom_shell_command != "") {
+      Shell.parse_argv (custom_shell_command, out custom_shell_commandv);
     }
 
     // Spawning works differently on host vs flatpak
@@ -426,7 +525,7 @@ public class Terminal.Terminal : Vte.Terminal {
     }
     else {
       argv += shell;
-      if (settings.command_as_login_shell && command == null) {
+      if (command_as_login_shell && command == null) {
         argv += "--login";
       }
     }
@@ -488,6 +587,10 @@ public class Terminal.Terminal : Vte.Terminal {
     uint keycode,
     Gdk.ModifierType state
   ) {
+    bool easy_copy_paste = this.profile_overrides_enabled
+      ? this.profile_easy_copy_paste
+      : Settings.get_default ().easy_copy_paste;
+
     if ((state & Gdk.ModifierType.CONTROL_MASK) == 0) {
       return false;
     }
@@ -496,7 +599,7 @@ public class Terminal.Terminal : Vte.Terminal {
       case "c": {
         if (
           this.get_has_selection () &&
-          Settings.get_default ().easy_copy_paste
+          easy_copy_paste
         ) {
           this.do_copy_clipboard ();
           this.unselect_all ();
@@ -505,7 +608,7 @@ public class Terminal.Terminal : Vte.Terminal {
         return false;
       }
       case "v": {
-        if (Settings.get_default ().easy_copy_paste) {
+        if (easy_copy_paste) {
           this.do_paste_clipboard ();
           return true;
         }

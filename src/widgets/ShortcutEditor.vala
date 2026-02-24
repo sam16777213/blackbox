@@ -187,6 +187,10 @@ public class Terminal.ShortcutEditor : Adw.PreferencesPage {
   construct {
     this.action_rows = new Gee.ArrayList<unowned Adw.ActionRow> ();
     this.build_ui ();
+
+    Keymap.get_default ().changed.connect (() => {
+      this.reload_store ();
+    });
   }
 
   void edit_shortcut (uint pos) {
@@ -217,8 +221,7 @@ public class Terminal.ShortcutEditor : Adw.PreferencesPage {
       if (response != Gtk.ResponseType.CANCEL) {
         keymap.save ();
         keymap.apply (this.app);
-        store.remove (pos);
-        store.insert_sorted (action, (CompareDataFunc<Action>) store_stort_func);
+        this.reload_store ();
       }
     });
 
@@ -255,6 +258,12 @@ public class Terminal.ShortcutEditor : Adw.PreferencesPage {
 
     this.shortcuts_group.add (list as Gtk.Widget);
 
+    this.reload_store ();
+  }
+
+  void reload_store () {
+    this.store.remove_all ();
+
     var keymap = Keymap.get_default ();
     foreach (string action in keymap.keymap.get_keys ()) {
       var a = new Action ();
@@ -263,10 +272,10 @@ public class Terminal.ShortcutEditor : Adw.PreferencesPage {
       a.label = action_map [action];
       a.accelerators = keymap.get_accelerators_for_action (action);
 
-      store.append (a);
+      this.store.append (a);
     }
 
-    store.sort ((CompareDataFunc<Action>) store_stort_func);
+    this.store.sort ((CompareDataFunc<Action>) store_stort_func);
   }
 
   static int store_stort_func (Action action_a, Action action_b) {

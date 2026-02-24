@@ -37,18 +37,16 @@ public struct Terminal.Padding {
   }
 
   public static Padding from_variant (Variant vari) {
-    /*return_val_if_fail (
-      vari.check_format_string ("(uuuu)", false),
-      Padding.zero ()
-    );*/
+    if (!vari.check_format_string ("(uuuu)", false)) {
+      return Padding.zero ();
+    }
 
-    var iter = vari.iterator ();
-    uint top = 0, right = 0, bottom = 0, left = 0;
+    uint top = 0;
+    uint right = 0;
+    uint bottom = 0;
+    uint left = 0;
 
-    iter.next ("u", &top);
-    iter.next ("u", &right);
-    iter.next ("u", &bottom);
-    iter.next ("u", &left);
+    vari.get ("(uuuu)", out top, out right, out bottom, out left);
 
     return Padding () {
       top = top,
@@ -105,6 +103,8 @@ public class Terminal.Window : Adw.ApplicationWindow {
   private SimpleAction copy_action;
   private Array<ulong> active_terminal_signal_handlers = new Array<ulong> ();
   private Gtk.CssProvider? window_background_provider = null;
+  private ulong profile_renamed_handler_id = 0;
+  private ulong profile_deleted_handler_id = 0;
 
   static PreferencesWindow? preferences_window = null;
 
@@ -248,7 +248,7 @@ public class Terminal.Window : Adw.ApplicationWindow {
 
 }
 
-  private void connect_signals () {
+	  private void connect_signals () {
     this.settings.schema.bind (
       "fill-tabs",
       this.tab_bar,
@@ -309,6 +309,26 @@ public class Terminal.Window : Adw.ApplicationWindow {
 
     this.tab_view.notify["selected-page"].connect (() => {
       this.on_tab_selected ();
+    });
+
+    this.notify["is-active"].connect (() => {
+      if (this.is_active) {
+        this.apply_selected_tab_profile ();
+      }
+    });
+
+    var profile_manager = ProfileManager.get_default ();
+    this.profile_renamed_handler_id = profile_manager.profile_renamed.connect ((
+      old_name,
+      new_name
+    ) => {
+      this.on_profile_renamed (old_name, new_name);
+    });
+    this.profile_deleted_handler_id = profile_manager.profile_deleted.connect ((
+      deleted_name,
+      fallback_name
+    ) => {
+      this.on_profile_deleted (deleted_name, fallback_name);
     });
 
     this.notify["default-width"].connect (() => {
@@ -376,10 +396,25 @@ public class Terminal.Window : Adw.ApplicationWindow {
     (this as Gtk.Widget)?.add_controller (c);
 
     this.close_request.connect (() => {
+      this.disconnect_profile_manager_handlers ();
       Settings.get_default ().was_fullscreened = this.fullscreened;
       Settings.get_default ().was_maximized = this.maximized;
       return false;
     });
+  }
+
+  private void disconnect_profile_manager_handlers () {
+    var profile_manager = ProfileManager.get_default ();
+
+    if (this.profile_renamed_handler_id != 0) {
+      profile_manager.disconnect (this.profile_renamed_handler_id);
+      this.profile_renamed_handler_id = 0;
+    }
+
+    if (this.profile_deleted_handler_id != 0) {
+      profile_manager.disconnect (this.profile_deleted_handler_id);
+      this.profile_deleted_handler_id = 0;
+    }
   }
 
   private void on_window_background_changed () {
@@ -472,6 +507,16 @@ public class Terminal.Window : Adw.ApplicationWindow {
     sa.activate.connect (this.close_active_tab);
     this.add_action (sa);
 
+    sa = new SimpleAction ("set-profile", VariantType.STRING);
+    sa.activate.connect ((parameter) => {
+      if (parameter == null) {
+        return;
+      }
+
+      this.set_active_tab_profile (parameter.get_string ());
+    });
+    this.add_action (sa);
+
     for (uint i = 1; i < 10; i++) {
       sa = new SimpleAction ("switch-tab-%u".printf (i), null);
       sa.activate.connect (() => {
@@ -510,8 +555,30 @@ public class Terminal.Window : Adw.ApplicationWindow {
     (this.tab_view.selected_page?.child as TerminalTab)?.close_request ();
   }
 
+  public string? get_active_tab_profile_name () {
+    return (this.tab_view.selected_page?.child as TerminalTab)?.profile_name;
+  }
+
+  public bool set_active_tab_profile (string profile_name) {
+    var tab = this.tab_view.selected_page?.child as TerminalTab;
+    if (tab == null || !tab.assign_profile_name (profile_name)) {
+      return false;
+    }
+
+    return ProfileManager.get_default ().set_session_profile (tab.profile_name);
+  }
+
   public void new_tab (string? command, string? cwd) {
-    var tab = new TerminalTab (this, command, cwd);
+    var profile_manager = ProfileManager.get_default ();
+    var profile_name = this.get_active_tab_profile_name ()
+      ?? profile_manager.session_profile_name;
+
+    var tab = new TerminalTab (
+      this,
+      command,
+      cwd,
+      profile_name
+    );
     var page = this.tab_view.add_page (tab, null);
 
     page.title = command ?? @"tab $(this.tab_view.n_pages)";
@@ -535,6 +602,8 @@ public class Terminal.Window : Adw.ApplicationWindow {
   }
 
   private void on_tab_selected () {
+    this.apply_selected_tab_profile ();
+
     if (this.active_terminal != null) {
       foreach (unowned ulong id in this.active_terminal_signal_handlers) {
         this.active_terminal.disconnect (id);
@@ -547,6 +616,45 @@ public class Terminal.Window : Adw.ApplicationWindow {
     var terminal = (this.tab_view.selected_page?.child as TerminalTab)?.terminal;
     this.active_terminal = terminal;
     terminal?.grab_focus ();
+  }
+
+  private void apply_selected_tab_profile () {
+    var profile_manager = ProfileManager.get_default ();
+    var tab = this.tab_view.selected_page?.child as TerminalTab;
+
+    if (tab == null) {
+      return;
+    }
+
+    if (!profile_manager.has_profile (tab.profile_name)) {
+      tab.assign_profile_name (profile_manager.session_profile_name);
+    }
+
+    profile_manager.set_session_profile (tab.profile_name);
+  }
+
+  private void on_profile_renamed (string old_name, string new_name) {
+    for (int i = 0; i < this.tab_view.n_pages; i++) {
+      var page = this.tab_view.get_nth_page (i);
+      var tab = page?.child as TerminalTab;
+
+      if (tab != null && tab.profile_name == old_name) {
+        tab.assign_profile_name (new_name);
+      }
+    }
+  }
+
+  private void on_profile_deleted (string deleted_name, string fallback_name) {
+    for (int i = 0; i < this.tab_view.n_pages; i++) {
+      var page = this.tab_view.get_nth_page (i);
+      var tab = page?.child as TerminalTab;
+
+      if (tab != null && tab.profile_name == deleted_name) {
+        tab.assign_profile_name (fallback_name);
+      }
+    }
+
+    this.apply_selected_tab_profile ();
   }
 
   private void on_active_terminal_changed () {

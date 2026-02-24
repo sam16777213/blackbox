@@ -32,8 +32,12 @@ bool light_themes_filter_func (Gtk.FlowBoxChild child) {
 public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
   [GtkChild] unowned Adw.ComboRow         cursor_shape_combo_row;
   [GtkChild] unowned Adw.ComboRow         cursor_blink_mode_combo_row;
+  [GtkChild] unowned Adw.ComboRow         terminal_active_profile_combo_row;
+  [GtkChild] unowned Adw.ComboRow         profiles_active_profile_combo_row;
+  [GtkChild] unowned Adw.ComboRow         profiles_selected_profile_combo_row;
   [GtkChild] unowned Adw.ComboRow         style_preference_combo_row;
   [GtkChild] unowned Adw.EntryRow         custom_command_entry_row;
+  [GtkChild] unowned Adw.EntryRow         profile_name_entry_row;
   [GtkChild] unowned Gtk.Adjustment       cell_height_spacing_adjustment;
   [GtkChild] unowned Gtk.Adjustment       cell_width_spacing_adjustment;
   [GtkChild] unowned Gtk.Adjustment       custom_scrollback_adjustment;
@@ -67,6 +71,9 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
   [GtkChild] unowned Gtk.ToggleButton     light_theme_toggle;
 
   private Window window;
+  private ProfileManager profile_manager;
+  private Gtk.StringList profile_names_model;
+  private bool is_updating_profile_ui = false;
 
   public string selected_theme {
     get {
@@ -102,6 +109,8 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
     );
 
     this.window = window;
+    this.profile_manager = ProfileManager.get_default ();
+    this.profile_names_model = new Gtk.StringList ({});
 
     this.custom_scrollback_adjustment.upper = uint.MAX;
 
@@ -463,6 +472,7 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
     });
 
     this.set_themes_filter_func ();
+    this.bind_profiles ();
   }
 
   // Methods
@@ -480,6 +490,122 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
 
       }
     }
+  }
+
+  private string? get_selected_profile_name (Adw.ComboRow row) {
+    var names = this.profile_manager.get_profile_names ();
+    var idx = (int) row.selected;
+
+    if (idx < 0 || idx >= names.length) {
+      return null;
+    }
+
+    return names[idx];
+  }
+
+  private void set_selected_profile_name (Adw.ComboRow row, string profile_name) {
+    var idx = this.profile_manager.get_profile_index (profile_name);
+    if (idx >= 0) {
+      row.selected = (uint) idx;
+    }
+  }
+
+  private void refresh_profile_ui () {
+    var current_selected = this.get_selected_profile_name (
+      this.profiles_selected_profile_combo_row
+    );
+    var active_profile =
+      this.window.get_active_tab_profile_name ()
+      ?? this.profile_manager.session_profile_name;
+
+    this.is_updating_profile_ui = true;
+
+    while (this.profile_names_model.get_n_items () > 0) {
+      this.profile_names_model.remove (this.profile_names_model.get_n_items () - 1);
+    }
+
+    foreach (unowned string name in this.profile_manager.get_profile_names ()) {
+      this.profile_names_model.append (name);
+    }
+
+    this.set_selected_profile_name (
+      this.terminal_active_profile_combo_row,
+      active_profile
+    );
+    this.set_selected_profile_name (
+      this.profiles_active_profile_combo_row,
+      active_profile
+    );
+
+    var selected_name = current_selected;
+    if (
+      selected_name == null ||
+      !this.profile_manager.has_profile (selected_name)
+    ) {
+      selected_name = active_profile;
+    }
+
+    if (selected_name != null) {
+      this.set_selected_profile_name (
+        this.profiles_selected_profile_combo_row,
+        selected_name
+      );
+      this.profile_name_entry_row.text = selected_name;
+    }
+
+    this.is_updating_profile_ui = false;
+  }
+
+  private void bind_profiles () {
+    this.terminal_active_profile_combo_row.model = this.profile_names_model;
+    this.profiles_active_profile_combo_row.model = this.profile_names_model;
+    this.profiles_selected_profile_combo_row.model = this.profile_names_model;
+
+    this.terminal_active_profile_combo_row.notify["selected"].connect (() => {
+      if (this.is_updating_profile_ui) {
+        return;
+      }
+
+      var selected = this.get_selected_profile_name (
+        this.terminal_active_profile_combo_row
+      );
+      if (selected != null) {
+        this.window.set_active_tab_profile (selected);
+      }
+    });
+
+    this.profiles_active_profile_combo_row.notify["selected"].connect (() => {
+      if (this.is_updating_profile_ui) {
+        return;
+      }
+
+      var selected = this.get_selected_profile_name (
+        this.profiles_active_profile_combo_row
+      );
+      if (selected != null) {
+        this.window.set_active_tab_profile (selected);
+      }
+    });
+
+    this.profiles_selected_profile_combo_row.notify["selected"].connect (() => {
+      if (this.is_updating_profile_ui) {
+        return;
+      }
+
+      var selected = this.get_selected_profile_name (
+        this.profiles_selected_profile_combo_row
+      );
+      if (selected != null) {
+        this.profile_name_entry_row.text = selected;
+      }
+    });
+
+    this.profile_manager.active_profile_changed.connect ((_name) => {
+      this.refresh_profile_ui ();
+    });
+    this.profile_manager.profiles_changed.connect (this.refresh_profile_ui);
+
+    this.refresh_profile_ui ();
   }
 
   private void do_reset_preferences () {
@@ -543,6 +669,63 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
   }
 
   [GtkCallback]
+  private void on_create_profile_clicked () {
+    var name = this.profile_name_entry_row.text.strip ();
+    if (name == "") {
+      return;
+    }
+
+    if (this.profile_manager.create_profile (name)) {
+      this.refresh_profile_ui ();
+      this.set_selected_profile_name (this.profiles_selected_profile_combo_row, name);
+      this.profile_name_entry_row.text = name;
+    }
+  }
+
+  [GtkCallback]
+  private void on_rename_profile_clicked () {
+    var selected_name = this.get_selected_profile_name (
+      this.profiles_selected_profile_combo_row
+    );
+    var new_name = this.profile_name_entry_row.text.strip ();
+
+    if (selected_name == null || new_name == "") {
+      return;
+    }
+
+    if (this.profile_manager.rename_profile (selected_name, new_name)) {
+      this.refresh_profile_ui ();
+      this.set_selected_profile_name (
+        this.profiles_selected_profile_combo_row,
+        new_name
+      );
+      this.profile_name_entry_row.text = new_name;
+    }
+  }
+
+  [GtkCallback]
+  private void on_delete_profile_clicked () {
+    var selected_name = this.get_selected_profile_name (
+      this.profiles_selected_profile_combo_row
+    );
+
+    if (selected_name == null) {
+      return;
+    }
+
+    if (this.profile_manager.delete_profile (selected_name)) {
+      this.refresh_profile_ui ();
+    }
+  }
+
+  [GtkCallback]
+  private void on_import_tilix_profiles_clicked () {
+    if (this.profile_manager.import_tilix_profiles () > 0) {
+      this.refresh_profile_ui ();
+    }
+  }
+
+  [GtkCallback]
   private void on_get_more_themes_online () {
     Gtk.show_uri (
       this,
@@ -560,4 +743,3 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
     );
   }
 }
-

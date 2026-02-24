@@ -40,8 +40,7 @@ public class Terminal.Application : Adw.Application {
 
     this.add_action_entries (ACTIONS, this);
 
-    var keymap = Keymap.get_default ();
-    keymap.apply (this);
+    ProfileManager.get_default ().initialize (this);
   }
 
   public override void activate () {

@@ -57,6 +57,9 @@ public class Terminal.Keymap : Object, Json.Serializable {
   public Gee.MultiMap<string, string?> keymap { get; protected set; }
   // Black Box's default keybindings.
   private Gee.MultiMap<string, string?> default_keymap;
+  private bool suppress_changed_signal = false;
+
+  public signal void changed ();
 
   construct {
     this.default_keymap = new Gee.HashMultiMap<string, string> ();
@@ -94,27 +97,68 @@ public class Terminal.Keymap : Object, Json.Serializable {
 
   private static Keymap? instance = null;
 
+  private static void ensure_user_data_dir_exists () {
+    var path = Constants.get_user_data_dir ();
+    if (!FileUtils.test (path, FileTest.IS_DIR)) {
+      var dir = GLib.File.new_for_path (path);
+
+      try {
+        dir.make_directory_with_parents ();
+      }
+      catch (Error e) {
+        warning ("Could not create %s: %s", path, e.message);
+      }
+    }
+  }
+
+  private void emit_changed () {
+    if (!this.suppress_changed_signal) {
+      this.changed ();
+    }
+  }
+
   public static Keymap get_default () {
     if (instance != null) {
       return instance;
     }
 
-    // FIXME: initialize `keymap` prop in `construct` and just instanciate
-    // Keymap manually if there's no user-keymap.json
+    Keymap.ensure_user_data_dir_exists ();
 
+    instance = new Keymap ();
     var f = new File (Constants.get_user_keybindings_path ());
 
     if (FileUtils.test (f.path, FileTest.EXISTS | FileTest.IS_REGULAR)) {
       try {
         string data = f.read_all (null);
+        if (data.strip () != "") {
+          var parser = new Json.Parser ();
+          parser.load_from_data (data, -1);
 
-        instance = (Keymap) Json.gobject_from_data (
-          typeof (Keymap),
-          data
-        );
-        instance.sanitize_user_keymap ();
+          var root = parser.get_root ();
+          if (
+            root != null &&
+            root.get_node_type () == Json.NodeType.OBJECT
+          ) {
+            var root_obj = root.get_object ();
+            Json.Object? keymap_obj = null;
 
-        return instance;
+            if (
+              root_obj.has_member ("keymap") &&
+              root_obj.get_member ("keymap").get_node_type ()
+                == Json.NodeType.OBJECT
+            ) {
+              keymap_obj = root_obj.get_object_member ("keymap");
+            }
+            else {
+              // Backward-compatible fallback: treat the root object as keymap.
+              keymap_obj = root_obj;
+            }
+
+            instance.import_keymap_json_object (keymap_obj);
+            instance.sanitize_user_keymap ();
+            return instance;
+          }
+        }
       }
       catch (Error e) {
         warning ("Failed to read user keymap: %s", e.message);
@@ -167,6 +211,7 @@ public class Terminal.Keymap : Object, Json.Serializable {
         this.keymap.@set (action, accel);
       }
     }
+    this.emit_changed ();
   }
 
   public void apply (Gtk.Application app) {
@@ -180,15 +225,26 @@ public class Terminal.Keymap : Object, Json.Serializable {
         }
       }
 
-      app.set_accels_for_action (key, accelerators);
+      app.set_accels_for_action (key, filtered_accelerators);
     }
   }
 
   public void save () {
-    var data = Json.gobject_to_data (this, null);
-    var f = new File (Constants.get_user_keybindings_path ());
+    Keymap.ensure_user_data_dir_exists ();
+
+    var root_obj = new Json.Object ();
+    root_obj.set_object_member ("keymap", this.export_keymap_json_object ());
+
+    var root_node = new Json.Node (Json.NodeType.OBJECT);
+    root_node.set_object (root_obj);
+
+    var generator = new Json.Generator ();
+    generator.set_pretty (true);
+    generator.set_root (root_node);
 
     try {
+      var data = generator.to_data (null);
+      var f = new File (Constants.get_user_keybindings_path ());
       f.write_plus (data);
       debug ("Save:\n%s", data);
     }
@@ -216,9 +272,119 @@ public class Terminal.Keymap : Object, Json.Serializable {
     return empty;
   }
 
+  public string[] get_actions () {
+    var seen = new Gee.HashSet<string> ();
+    string[] actions = {};
+
+    foreach (string action in this.default_keymap.get_keys ()) {
+      if (!seen.contains (action)) {
+        seen.add (action);
+        actions += action;
+      }
+    }
+
+    foreach (string action in this.keymap.get_keys ()) {
+      if (!seen.contains (action)) {
+        seen.add (action);
+        actions += action;
+      }
+    }
+
+    return actions;
+  }
+
+  public Gee.HashMap<string, string?> export_flat_keymap () {
+    var map = new Gee.HashMap<string, string?> ();
+
+    foreach (string action in this.get_actions ()) {
+      var accels = this.get_accelerators_for_action (action);
+      map.@set (
+        action,
+        accels.length > 0 ? accels[0] : null
+      );
+    }
+
+    return map;
+  }
+
+  public Json.Object export_keymap_json_object () {
+    var obj = new Json.Object ();
+    var map = this.export_flat_keymap ();
+
+    foreach (string action in map.keys) {
+      var accel = map[action];
+
+      if (accel == null || accel == "") {
+        obj.set_null_member (action);
+      }
+      else {
+        obj.set_string_member (action, accel);
+      }
+    }
+
+    return obj;
+  }
+
+  public void import_flat_keymap (Gee.Map<string, string?> map) {
+    this.suppress_changed_signal = true;
+
+    this.keymap = new Gee.HashMultiMap<string, string> ();
+
+    foreach (string action in this.default_keymap.get_keys ()) {
+      if (map.has_key (action)) {
+        this.keymap.@set (action, map[action]);
+      }
+      else {
+        foreach (string? accel in this.default_keymap.@get (action)) {
+          this.keymap.@set (action, accel);
+        }
+      }
+    }
+
+    foreach (string action in map.keys) {
+      if (!this.keymap.contains (action)) {
+        this.keymap.@set (action, map[action]);
+      }
+    }
+
+    this.sanitize_user_keymap ();
+    this.suppress_changed_signal = false;
+    this.emit_changed ();
+  }
+
+  public void import_keymap_json_object (Json.Object? obj) {
+    var map = new Gee.HashMap<string, string?> ();
+
+    obj?.foreach_member ((_obj, action, node) => {
+      switch (node.get_node_type ()) {
+        case Json.NodeType.NULL:
+          map.@set (action, null);
+          break;
+        case Json.NodeType.VALUE:
+          map.@set (action, node.get_string ());
+          break;
+        case Json.NodeType.ARRAY: {
+          var arr = node.get_array ();
+          if (arr == null || arr.get_length () == 0) {
+            map.@set (action, null);
+          }
+          else {
+            map.@set (action, arr.get_string_element (0));
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
+
+    this.import_flat_keymap (map);
+  }
+
   public void set_shortcut_for_action (string action, string? accel) {
     this.keymap.remove_all (action);
     this.keymap.@set (action, accel);
+    this.emit_changed ();
   }
 
   public string? get_action_for_shortcut (string shortcut) {
