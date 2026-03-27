@@ -25,10 +25,15 @@ public class Terminal.TerminalTab : Gtk.Box {
   public Gtk.ScrolledWindow scrolled  { get; protected set; }
   public string             profile_name { get; private set; }
 
+  private Gtk.Overlay       terminal_overlay;
+  private Gtk.Revealer      zoom_overlay_revealer;
+  private Gtk.Label         zoom_overlay_label;
   private SearchToolbar     search_toolbar;
   private bool              profile_overrides_enabled = false;
   private bool              profile_show_scrollbars = true;
   private bool              profile_use_overlay_scrolling = true;
+  private uint              hide_zoom_overlay_timeout_id = 0;
+  private const uint        zoom_overlay_hide_delay_ms = 1400;
   public  Window            window;
 
   public TerminalTab (
@@ -79,9 +84,40 @@ public class Terminal.TerminalTab : Gtk.Box {
       hscrollbar_policy = Gtk.PolicyType.NEVER,
       vscrollbar_policy = Gtk.PolicyType.AUTOMATIC
     };
-    this.scrolled.child = twig;
+    this.scrolled.set_child (twig);
 
-    this.append (this.scrolled);
+    this.terminal_overlay = new Gtk.Overlay () {
+      hexpand = true,
+      vexpand = true,
+      halign = Gtk.Align.FILL,
+      valign = Gtk.Align.FILL
+    };
+    this.terminal_overlay.set_child (this.scrolled);
+
+    this.zoom_overlay_label = new Gtk.Label ("") {
+      xalign = 1.0f,
+      yalign = 0.0f,
+      justify = Gtk.Justification.RIGHT,
+      selectable = false,
+      wrap = false,
+      can_target = false
+    };
+    this.zoom_overlay_label.add_css_class ("terminal-font-overlay");
+
+    this.zoom_overlay_revealer = new Gtk.Revealer () {
+      halign = Gtk.Align.END,
+      valign = Gtk.Align.START,
+      margin_top = 12,
+      margin_end = 12,
+      transition_duration = 180,
+      transition_type = Gtk.RevealerTransitionType.CROSSFADE,
+      reveal_child = false,
+      can_target = false
+    };
+    this.zoom_overlay_revealer.set_child (this.zoom_overlay_label);
+    this.terminal_overlay.add_overlay (this.zoom_overlay_revealer);
+
+    this.append (this.terminal_overlay);
     twig.grab_focus ();
 
     this.search_toolbar = new SearchToolbar (this.terminal) {
@@ -133,17 +169,16 @@ public class Terminal.TerminalTab : Gtk.Box {
   }
 
   private void update_scrollbar_visibility (bool show_scrollbars) {
-    var is_scrollbar_being_used = this.scrolled.child == this.terminal;
+    var current_child = this.terminal_overlay.get_child ();
 
-    if (show_scrollbars && !is_scrollbar_being_used) {
-      this.remove (this.terminal);
-      this.scrolled.child = this.terminal;
-      this.prepend (this.scrolled);
+    if (show_scrollbars && current_child != this.scrolled) {
+      this.terminal_overlay.set_child (null);
+      this.scrolled.set_child (this.terminal);
+      this.terminal_overlay.set_child (this.scrolled);
     }
-    else if (!show_scrollbars && is_scrollbar_being_used) {
-      this.remove (this.scrolled);
-      this.scrolled.child = null;
-      this.prepend (this.terminal);
+    else if (!show_scrollbars && current_child != this.terminal) {
+      this.scrolled.set_child (null);
+      this.terminal_overlay.set_child (this.terminal);
     }
   }
 
@@ -157,6 +192,7 @@ public class Terminal.TerminalTab : Gtk.Box {
     this.terminal.exit.connect (() => {
       this.close_request ();
     });
+    this.terminal.ctrl_scroll_zoom_changed.connect (this.show_zoom_overlay);
 
     settings.notify["show-scrollbars"].connect (() => {
       if (this.profile_overrides_enabled) {
@@ -180,6 +216,35 @@ public class Terminal.TerminalTab : Gtk.Box {
       this.terminal as Object,
       "enable-sixel",
       BindingFlags.SYNC_CREATE
+    );
+  }
+
+  private void show_zoom_overlay (
+    string font_name,
+    string font_size,
+    int char_width,
+    int char_height
+  ) {
+    this.zoom_overlay_label.label = _("Font: %s %s\nCell: %dx%d").printf (
+      font_name,
+      font_size,
+      char_width,
+      char_height
+    );
+    this.zoom_overlay_revealer.reveal_child = true;
+
+    if (this.hide_zoom_overlay_timeout_id != 0) {
+      Source.remove (this.hide_zoom_overlay_timeout_id);
+      this.hide_zoom_overlay_timeout_id = 0;
+    }
+
+    this.hide_zoom_overlay_timeout_id = Timeout.add (
+      TerminalTab.zoom_overlay_hide_delay_ms,
+      () => {
+        this.zoom_overlay_revealer.reveal_child = false;
+        this.hide_zoom_overlay_timeout_id = 0;
+        return false;
+      }
     );
   }
 

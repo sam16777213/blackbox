@@ -29,16 +29,6 @@ public class Terminal.Terminal : Vte.Terminal {
     TEXT,
   }
 
-  static string[] blackbox_envv = {
-    "TERM=xterm-256color",
-    "COLORTERM=truecolor",
-    "TERM_PROGRAM=%s".printf (APP_NAME),
-    "BLACKBOX_THEMES_DIR=%s".printf (Constants.get_user_schemes_dir ()),
-    "VTE_VERSION=%u".printf (
-      Vte.MAJOR_VERSION * 10000 + Vte.MINOR_VERSION * 100 + Vte.MICRO_VERSION
-    )
-  };
-
   // Signals
 
   /**
@@ -46,6 +36,12 @@ public class Terminal.Terminal : Vte.Terminal {
    * listen for this signal and close the tab that contains this terminal.
    */
   public signal void exit ();
+  public signal void ctrl_scroll_zoom_changed (
+    string font_name,
+    string font_size,
+    int char_width,
+    int char_height
+  );
 
   // Properties
 
@@ -430,6 +426,15 @@ public class Terminal.Terminal : Vte.Terminal {
     kpcontroller.key_pressed.connect (this.on_key_pressed);
     this.add_controller (kpcontroller);
 
+    var scroll_controller = new Gtk.EventControllerScroll (
+      Gtk.EventControllerScrollFlags.VERTICAL |
+      Gtk.EventControllerScrollFlags.DISCRETE
+    );
+    scroll_controller.scroll.connect ((_dx, dy) => {
+      return this.on_scroll (scroll_controller, _dx, dy);
+    });
+    this.add_controller (scroll_controller);
+
     var left_click_controller = new Gtk.GestureClick () {
       button = Gdk.BUTTON_PRIMARY,
     };
@@ -457,6 +462,131 @@ public class Terminal.Terminal : Vte.Terminal {
       .connect (() => {
         this.notify_property ("user-scrollback-lines");
       });
+  }
+
+  private bool on_scroll (
+    Gtk.EventControllerScroll controller,
+    double _dx,
+    double dy
+  ) {
+    if (!this.window.is_active || dy == 0) {
+      return false;
+    }
+
+    var event = controller.get_current_event ();
+    if (event == null) {
+      return false;
+    }
+
+    if ((event.get_modifier_state () & Gdk.ModifierType.CONTROL_MASK) == 0) {
+      return false;
+    }
+
+    int delta_size_units = 0;
+    if (dy < 0) {
+      delta_size_units = Pango.SCALE / 4;
+    }
+    else if (dy > 0) {
+      delta_size_units = -(Pango.SCALE / 4);
+    }
+
+    if (delta_size_units == 0) {
+      return false;
+    }
+
+    if (!this.adjust_tab_font_size (delta_size_units)) {
+      return false;
+    }
+
+    this.emit_ctrl_scroll_zoom_changed ();
+    return true;
+  }
+
+  private bool adjust_tab_font_size (int delta_size_units) {
+    if (delta_size_units == 0) {
+      return false;
+    }
+
+    var font = this.profile_overrides_enabled
+      ? this.profile_font
+      : this.settings.font;
+    var desc = Pango.FontDescription.from_string (font);
+
+    int current_size = desc.get_size ();
+    if (current_size <= 0) {
+      var current_desc = this.font_desc;
+      current_size = current_desc != null
+        ? current_desc.get_size ()
+        : (12 * Pango.SCALE);
+    }
+
+    int next_size = current_size + delta_size_units;
+    if (next_size < Pango.SCALE) {
+      next_size = Pango.SCALE;
+    }
+
+    if (desc.get_size_is_absolute ()) {
+      desc.set_absolute_size ((double) next_size);
+    }
+    else {
+      desc.set_size (next_size);
+    }
+
+    var next_font = desc.to_string ();
+    if (this.profile_overrides_enabled) {
+      this.profile_font = next_font;
+      this.on_font_changed ();
+      return true;
+    }
+
+    this.font_desc = desc;
+    this.apply_crisp_font_options ();
+    this.settings.font = next_font;
+    return true;
+  }
+
+  private void emit_ctrl_scroll_zoom_changed () {
+    var font = this.profile_overrides_enabled
+      ? this.profile_font
+      : this.settings.font;
+    var desc = Pango.FontDescription.from_string (font);
+    var family = desc.get_family () ?? "Monospace";
+    if (family == "") {
+      family = "Monospace";
+    }
+
+    int size_units = desc.get_size ();
+    if (size_units <= 0) {
+      size_units = 12 * Pango.SCALE;
+    }
+
+    var size = size_units / (double) Pango.SCALE;
+    var unit = desc.get_size_is_absolute () ? "px" : "pt";
+
+    this.ctrl_scroll_zoom_changed (
+      family,
+      "%.2f%s".printf (size, unit),
+      (int) this.get_char_width (),
+      (int) this.get_char_height ()
+    );
+  }
+
+  private string get_term_env () {
+    return this.settings.use_sixel
+      ? "TERM=vt340"
+      : "TERM=xterm-256color";
+  }
+
+  private string[] get_blackbox_envv () {
+    return {
+      this.get_term_env (),
+      "COLORTERM=truecolor",
+      "TERM_PROGRAM=%s".printf (APP_NAME),
+      "BLACKBOX_THEMES_DIR=%s".printf (Constants.get_user_schemes_dir ()),
+      "VTE_VERSION=%u".printf (
+        Vte.MAJOR_VERSION * 10000 + Vte.MINOR_VERSION * 100 + Vte.MICRO_VERSION
+      )
+    };
   }
 
   private void spawn (string? command, string? cwd) throws Error {
@@ -496,7 +626,7 @@ public class Terminal.Terminal : Vte.Terminal {
 
       envv = fp_get_env () ?? Environ.get ();
 
-      foreach (unowned string env in Terminal.blackbox_envv) {
+      foreach (unowned string env in this.get_blackbox_envv ()) {
         argv += @"--env=$(env)";
       }
 
@@ -507,7 +637,7 @@ public class Terminal.Terminal : Vte.Terminal {
     else {
       envv = Environ.get ();
 
-      foreach (unowned string env in Terminal.blackbox_envv) {
+      foreach (unowned string env in this.get_blackbox_envv ()) {
         envv += env;
       }
 

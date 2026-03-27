@@ -236,6 +236,14 @@ window:not(.about) .floating-revealer > headerbar {
   padding: 12px;
 }
 
+.terminal-font-overlay {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background-color: alpha(@headerbar_bg_color, 0.9);
+  color: @headerbar_fg_color;
+  box-shadow: 0 2px 10px alpha(black, 0.3);
+}
+
 /* :root {
   --color-0: rgb(40,40,40);
   --color-1: rgb(204,36,29);
