@@ -50,7 +50,7 @@ blackbox_deps = [
   # at 1.1 to make it easier for translators to work on Black Box
   dependency('libadwaita-1', version: '>= 1.1', static: static_link),
   #dependency('marble', version: '>= 42'),
-  dependency('vte-2.91-gtk4', version: '>= 0.69.0', static: static_link),
+  dependency('vte-2.91-gtk4', version: '>= 0.69.0', static: static_link, fallback: ['vte-sixel', 'libvte_gtk4_dep']),
   dependency('json-glib-1.0', version: '>= 1.4.4', static: static_link),
   dependency('libpcre2-8', static: static_link),
   dependency('libxml-2.0', version: '>= 2.9.12', static: static_link),

@@ -1,0 +1,3 @@
+[submodule "subprojects/vte-sixel"]
+	path = subprojects/vte-sixel
+	url = https://gitlab.gnome.org/GNOME/vte.git
