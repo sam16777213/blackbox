@@ -422,7 +422,9 @@ public class Terminal.Terminal : Vte.Terminal {
   }
 
   private void connect_signals () {
-    var kpcontroller = new Gtk.EventControllerKey ();
+    var kpcontroller = new Gtk.EventControllerKey () {
+      propagation_phase = Gtk.PropagationPhase.CAPTURE
+    };
     kpcontroller.key_pressed.connect (this.on_key_pressed);
     this.add_controller (kpcontroller);
 
@@ -717,6 +719,15 @@ public class Terminal.Terminal : Vte.Terminal {
     uint keycode,
     Gdk.ModifierType state
   ) {
+    if (
+      keyval == Gdk.Key.Return &&
+      (state & Gtk.accelerator_get_default_mod_mask ()) ==
+        Gdk.ModifierType.SHIFT_MASK
+    ) {
+      this.feed_child ("\x1b[13;2u".data);
+      return true;
+    }
+
     bool easy_copy_paste = this.profile_overrides_enabled
       ? this.profile_easy_copy_paste
       : Settings.get_default ().easy_copy_paste;
