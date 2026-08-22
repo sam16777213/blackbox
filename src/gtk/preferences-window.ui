@@ -7,7 +7,7 @@
     <property name="default-height">800</property>
     <property name="modal">False</property>
     <child>
-      <object class="AdwPreferencesPage">
+      <object class="AdwPreferencesPage" id="general_page">
         <property name="title" translatable="yes">General</property>
         <property name="icon-name">settings-symbolic</property>
         <child>
@@ -51,6 +51,7 @@
             <child>
               <object class="AdwComboRow" id="style_preference_combo_row">
                 <property name="title" translatable="yes">Style Preference</property>
+                <property name="subtitle" translatable="yes">Controls the app interface style. Profile Theme controls terminal colors for each style.</property>
                 <property name="model">
                   <object class="GtkStringList">
                     <items>
@@ -210,16 +211,16 @@
       </object>
     </child>
     <child>
-      <object class="AdwPreferencesPage">
+      <object class="AdwPreferencesPage" id="terminal_page">
         <property name="title" translatable="yes">Terminal</property>
         <property name="icon-name">utilities-terminal-symbolic</property>
         <child>
           <object class="AdwPreferencesGroup">
-            <property name="title" translatable="yes">Profile</property>
+            <property name="title" translatable="yes">Profile Editing</property>
             <child>
-              <object class="AdwComboRow" id="terminal_active_profile_combo_row">
-                <property name="title" translatable="yes">Active Profile</property>
-                <property name="subtitle" translatable="yes">Terminal and keyboard changes apply to the active tab profile.</property>
+              <object class="AdwComboRow" id="terminal_editing_profile_combo_row">
+                <property name="title" translatable="yes">Profile Being Edited</property>
+                <property name="subtitle" translatable="yes">Terminal, theme, and keyboard changes are saved to this profile. This does not switch open tabs.</property>
               </object>
             </child>
           </object>
@@ -439,7 +440,7 @@
         </child>
         <child>
           <object class="AdwPreferencesGroup" id="theme_scheme_group">
-            <property name="title" translatable="yes">Theme</property>
+            <property name="title" translatable="yes">Profile Theme</property>
             <child type="header-suffix">
               <object class="GtkBox">
                 <property name="valign">center</property>
@@ -472,7 +473,7 @@
                 <child>
                   <object class="GtkLabel">
                     <property name="xalign">0</property>
-                    <property name="label" translatable="yes">Set your preferred theme for light and dark styles.</property>
+                    <property name="label" translatable="yes">Set the color scheme this profile uses with the app's light and dark styles.</property>
                     <style>
                       <class name="dim-label" />
                     </style>
@@ -487,13 +488,13 @@
                     </style>
                     <child>
                       <object class="GtkToggleButton" id="light_theme_toggle">
-                        <property name="label" translatable="yes">Light Theme</property>
+                        <property name="label" translatable="yes">For Light Style</property>
                         <property name="active">True</property>
                       </object>
                     </child>
                     <child>
                       <object class="GtkToggleButton" id="dark_theme_toggle">
-                        <property name="label" translatable="yes">Dark Theme</property>
+                        <property name="label" translatable="yes">For Dark Style</property>
                         <property name="group">light_theme_toggle</property>
                       </object>
                     </child>
@@ -535,16 +536,16 @@
       </object>
     </child>
     <child>
-      <object class="AdwPreferencesPage">
+      <object class="AdwPreferencesPage" id="profiles_page">
         <property name="title" translatable="yes">Profiles</property>
         <property name="icon-name">avatar-default-symbolic</property>
         <child>
           <object class="AdwPreferencesGroup">
-            <property name="title" translatable="yes">Active Profile</property>
+            <property name="title" translatable="yes">Startup</property>
             <child>
-              <object class="AdwComboRow" id="profiles_active_profile_combo_row">
-                <property name="title" translatable="yes">Active Profile</property>
-                <property name="subtitle" translatable="yes">Switch profile for the active tab.</property>
+              <object class="AdwComboRow" id="profiles_startup_profile_combo_row">
+                <property name="title" translatable="yes">Startup Profile</property>
+                <property name="subtitle" translatable="yes">Used for the first terminal after Black Box starts. This does not change open tabs.</property>
               </object>
             </child>
           </object>
@@ -554,7 +555,7 @@
             <property name="title" translatable="yes">Manage Profiles</property>
             <child>
               <object class="AdwComboRow" id="profiles_selected_profile_combo_row">
-                <property name="title" translatable="yes">Selected Profile</property>
+                <property name="title" translatable="yes">Profile to Manage</property>
                 <property name="subtitle" translatable="yes">Choose which profile to rename or delete.</property>
               </object>
             </child>
@@ -566,7 +567,7 @@
             <child>
               <object class="AdwActionRow">
                 <property name="title" translatable="yes">Create Profile</property>
-                <property name="subtitle" translatable="yes">Create from current active profile settings.</property>
+                <property name="subtitle" translatable="yes">Create from the settings of the profile currently being edited.</property>
                 <child>
                   <object class="GtkButton">
                     <property name="label" translatable="yes">Create</property>
@@ -623,12 +624,12 @@
       </object>
     </child>
     <child>
-      <object class="TerminalShortcutEditor">
+      <object class="TerminalShortcutEditor" id="shortcut_editor">
         <property name="app" bind-source="TerminalPreferencesWindow" bind-property="application" bind-flags="default" />
       </object>
     </child>
     <child>
-      <object class="AdwPreferencesPage">
+      <object class="AdwPreferencesPage" id="advanced_page">
         <property name="title" translatable="yes">Advanced</property>
         <property name="icon-name">applications-science-symbolic</property>
         <child>

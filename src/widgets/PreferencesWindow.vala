@@ -30,10 +30,15 @@ bool light_themes_filter_func (Gtk.FlowBoxChild child) {
 
 [GtkTemplate (ui = "/com/raggesilver/BlackBox/gtk/preferences-window.ui")]
 public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
+  [GtkChild] unowned Adw.PreferencesPage  general_page;
+  [GtkChild] unowned Adw.PreferencesPage  terminal_page;
+  [GtkChild] unowned Adw.PreferencesPage  profiles_page;
+  [GtkChild] unowned ShortcutEditor       shortcut_editor;
+  [GtkChild] unowned Adw.PreferencesPage  advanced_page;
   [GtkChild] unowned Adw.ComboRow         cursor_shape_combo_row;
   [GtkChild] unowned Adw.ComboRow         cursor_blink_mode_combo_row;
-  [GtkChild] unowned Adw.ComboRow         terminal_active_profile_combo_row;
-  [GtkChild] unowned Adw.ComboRow         profiles_active_profile_combo_row;
+  [GtkChild] unowned Adw.ComboRow         terminal_editing_profile_combo_row;
+  [GtkChild] unowned Adw.ComboRow         profiles_startup_profile_combo_row;
   [GtkChild] unowned Adw.ComboRow         profiles_selected_profile_combo_row;
   [GtkChild] unowned Adw.ComboRow         style_preference_combo_row;
   [GtkChild] unowned Adw.EntryRow         custom_command_entry_row;
@@ -116,6 +121,11 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
 
     this.build_ui ();
     this.bind_data ();
+    this.expand_page_contents (this.general_page);
+    this.expand_page_contents (this.terminal_page);
+    this.expand_page_contents (this.profiles_page);
+    this.expand_page_contents (this.shortcut_editor);
+    this.expand_page_contents (this.advanced_page);
   }
 
   // Build UI
@@ -477,6 +487,26 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
 
   // Methods
 
+  private bool expand_page_contents (Gtk.Widget widget) {
+    var clamp = widget as Adw.Clamp;
+    if (clamp != null) {
+      clamp.maximum_size = int.MAX;
+      return true;
+    }
+
+    for (
+      var child = widget.get_first_child ();
+      child != null;
+      child = child.get_next_sibling ()
+    ) {
+      if (this.expand_page_contents (child)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   private void set_themes_filter_func () {
     if (!this.filter_themes_check_button.active) {
       this.preview_flow_box.set_filter_func (null);
@@ -514,9 +544,7 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
     var current_selected = this.get_selected_profile_name (
       this.profiles_selected_profile_combo_row
     );
-    var active_profile =
-      this.window.get_active_tab_profile_name ()
-      ?? this.profile_manager.session_profile_name;
+    var editing_profile = this.profile_manager.session_profile_name;
 
     this.is_updating_profile_ui = true;
 
@@ -529,12 +557,12 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
     }
 
     this.set_selected_profile_name (
-      this.terminal_active_profile_combo_row,
-      active_profile
+      this.terminal_editing_profile_combo_row,
+      editing_profile
     );
     this.set_selected_profile_name (
-      this.profiles_active_profile_combo_row,
-      active_profile
+      this.profiles_startup_profile_combo_row,
+      this.profile_manager.startup_profile_name
     );
 
     var selected_name = current_selected;
@@ -542,7 +570,7 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
       selected_name == null ||
       !this.profile_manager.has_profile (selected_name)
     ) {
-      selected_name = active_profile;
+      selected_name = editing_profile;
     }
 
     if (selected_name != null) {
@@ -557,33 +585,33 @@ public class Terminal.PreferencesWindow : Adw.PreferencesWindow {
   }
 
   private void bind_profiles () {
-    this.terminal_active_profile_combo_row.model = this.profile_names_model;
-    this.profiles_active_profile_combo_row.model = this.profile_names_model;
+    this.terminal_editing_profile_combo_row.model = this.profile_names_model;
+    this.profiles_startup_profile_combo_row.model = this.profile_names_model;
     this.profiles_selected_profile_combo_row.model = this.profile_names_model;
 
-    this.terminal_active_profile_combo_row.notify["selected"].connect (() => {
+    this.terminal_editing_profile_combo_row.notify["selected"].connect (() => {
       if (this.is_updating_profile_ui) {
         return;
       }
 
       var selected = this.get_selected_profile_name (
-        this.terminal_active_profile_combo_row
+        this.terminal_editing_profile_combo_row
       );
       if (selected != null) {
-        this.window.set_active_tab_profile (selected);
+        this.profile_manager.set_session_profile (selected);
       }
     });
 
-    this.profiles_active_profile_combo_row.notify["selected"].connect (() => {
+    this.profiles_startup_profile_combo_row.notify["selected"].connect (() => {
       if (this.is_updating_profile_ui) {
         return;
       }
 
       var selected = this.get_selected_profile_name (
-        this.profiles_active_profile_combo_row
+        this.profiles_startup_profile_combo_row
       );
       if (selected != null) {
-        this.window.set_active_tab_profile (selected);
+        this.profile_manager.set_startup_profile (selected);
       }
     });
 

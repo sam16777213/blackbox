@@ -103,6 +103,8 @@ public class Terminal.Window : Adw.ApplicationWindow {
   private SimpleAction copy_action;
   private Array<ulong> active_terminal_signal_handlers = new Array<ulong> ();
   private Gtk.CssProvider? window_background_provider = null;
+  private Gtk.CssProvider? external_border_provider = null;
+  private bool external_border_reset_on_focus = false;
   private ulong profile_renamed_handler_id = 0;
   private ulong profile_deleted_handler_id = 0;
 
@@ -314,6 +316,9 @@ public class Terminal.Window : Adw.ApplicationWindow {
     this.notify["is-active"].connect (() => {
       if (this.is_active) {
         this.apply_selected_tab_profile ();
+        if (this.external_border_reset_on_focus) {
+          this.clear_external_border ();
+        }
       }
     });
 
@@ -441,6 +446,119 @@ public class Terminal.Window : Adw.ApplicationWindow {
       this.window_background_provider,
       Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
     );
+  }
+
+  private Adw.TabPage? find_terminal_page (int terminal_pid) {
+    for (int i = 0; i < this.tab_view.n_pages; i++) {
+      var page = this.tab_view.get_nth_page (i);
+      var tab = page.child as TerminalTab;
+      if (tab != null && (int) tab.terminal.pid == terminal_pid) {
+        return page;
+      }
+    }
+    return null;
+  }
+
+  public bool owns_terminal_pid (int terminal_pid) {
+    return this.find_terminal_page (terminal_pid) != null;
+  }
+
+  public string? terminal_title_for_pid (int terminal_pid) {
+    var page = terminal_pid == 0
+      ? this.tab_view.selected_page
+      : this.find_terminal_page (terminal_pid);
+    return page?.title;
+  }
+
+  public void focus_terminal_pid (int terminal_pid) {
+    var page = terminal_pid == 0
+      ? this.tab_view.selected_page
+      : this.find_terminal_page (terminal_pid);
+    if (page == null) {
+      return;
+    }
+
+    this.tab_view.set_selected_page (page);
+    var x11_surface = this.get_surface () as Gdk.X11.Surface;
+    if (x11_surface != null) {
+      this.present_with_time (x11_surface.get_server_time ());
+    } else {
+      this.present ();
+    }
+  }
+
+  public void set_external_border (
+    string color,
+    bool animate,
+    string border_type
+  ) {
+    var rgba = rgba_from_string (color);
+    if (rgba == null) {
+      warning ("Invalid external border color: %s", color);
+      return;
+    }
+
+    if (
+      border_type != "persistent" &&
+      border_type != "resettable_on_focus"
+    ) {
+      warning ("Invalid external border type: %s", border_type);
+      return;
+    }
+
+    var reset_on_focus = (
+      border_type == "resettable_on_focus"
+    );
+    this.clear_external_border ();
+    if (reset_on_focus && this.is_active) {
+      return;
+    }
+    this.external_border_reset_on_focus = reset_on_focus;
+
+    var css_color = rgba.to_string ();
+    var css = animate
+      ? """
+        @keyframes blackbox-external-border-pulse {
+          from { border-color: alpha(%1$s, 0.25); }
+          to { border-color: %1$s; }
+        }
+        @keyframes blackbox-external-border-pulse-backdrop {
+          from { border-color: alpha(shade(%1$s, 0.95), 0.25); }
+          to { border-color: shade(%1$s, 0.95); }
+        }
+        #blackbox-main-window:not(.fullscreen) {
+          border: 1px solid %1$s;
+          animation: blackbox-external-border-pulse 900ms ease-in-out infinite alternate;
+        }
+        #blackbox-main-window:not(.fullscreen):backdrop {
+          animation-name: blackbox-external-border-pulse-backdrop;
+        }
+        """.printf (css_color)
+      : """
+        #blackbox-main-window:not(.fullscreen) {
+          border: 1px solid %1$s;
+          animation: none;
+        }
+        #blackbox-main-window:not(.fullscreen):backdrop {
+          border-color: shade(%1$s, 0.95);
+        }
+        """.printf (css_color);
+
+    this.external_border_provider = Marble.get_css_provider_for_data (css);
+    this.get_style_context ().add_provider (
+      this.external_border_provider,
+      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1
+    );
+  }
+
+  private void clear_external_border () {
+    if (this.external_border_provider != null) {
+      this.get_style_context ().remove_provider (
+        this.external_border_provider
+      );
+      this.external_border_provider = null;
+    }
+    this.external_border_reset_on_focus = false;
   }
 
   private void add_actions () {

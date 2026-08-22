@@ -40,6 +40,34 @@ public class Terminal.Application : Adw.Application {
 
     this.add_action_entries (ACTIONS, this);
 
+    var border_action = new SimpleAction (
+      "set-terminal-border",
+      new VariantType ("(isbs)")
+    );
+    border_action.activate.connect (this.on_set_terminal_border);
+    this.add_action (border_action);
+
+    var focus_action = new SimpleAction (
+      "focus-terminal",
+      new VariantType ("i")
+    );
+    focus_action.activate.connect (this.on_focus_terminal);
+    this.add_action (focus_action);
+
+    var notify_action = new SimpleAction (
+      "notify-turn-finished",
+      new VariantType ("i")
+    );
+    notify_action.activate.connect (this.on_notify_turn_finished);
+    this.add_action (notify_action);
+
+    var attention_action = new SimpleAction (
+      "notify-codex-attention",
+      new VariantType ("(is)")
+    );
+    attention_action.activate.connect (this.on_notify_codex_attention);
+    this.add_action (attention_action);
+
     ProfileManager.get_default ().initialize (this);
   }
 
@@ -109,5 +137,105 @@ public class Terminal.Application : Adw.Application {
 
   private void on_focus_previous_tab () {
     (this.get_active_window () as Window)?.focus_previous_tab ();
+  }
+
+  private Window? find_terminal_window (int terminal_pid) {
+    if (terminal_pid == 0) {
+      return this.get_active_window () as Window;
+    }
+
+    foreach (var gtk_window in this.get_windows ()) {
+      var window = gtk_window as Window;
+      if (window != null && window.owns_terminal_pid (terminal_pid)) {
+        return window;
+      }
+    }
+    return null;
+  }
+
+  private void on_set_terminal_border (Variant? parameter) {
+    if (parameter == null) {
+      return;
+    }
+
+    int terminal_pid;
+    string color;
+    bool animate;
+    string border_type;
+    parameter.get (
+      "(isbs)",
+      out terminal_pid,
+      out color,
+      out animate,
+      out border_type
+    );
+
+    this.find_terminal_window (terminal_pid)?.set_external_border (
+      color,
+      animate,
+      border_type
+    );
+  }
+
+  private void on_focus_terminal (Variant? parameter) {
+    if (parameter != null) {
+      var terminal_pid = parameter.get_int32 ();
+      this.find_terminal_window (terminal_pid)?.focus_terminal_pid (
+        terminal_pid
+      );
+    }
+  }
+
+  private void on_notify_turn_finished (Variant? parameter) {
+    if (parameter == null) {
+      return;
+    }
+
+    this.send_codex_notification (
+      parameter.get_int32 (),
+      _("Codex turn finished."),
+      _("Codex turn finished")
+    );
+  }
+
+  private void on_notify_codex_attention (Variant? parameter) {
+    if (parameter == null) {
+      return;
+    }
+
+    int terminal_pid;
+    string body;
+    parameter.get ("(is)", out terminal_pid, out body);
+    this.send_codex_notification (
+      terminal_pid,
+      body,
+      _("Codex needs attention")
+    );
+  }
+
+  private void send_codex_notification (
+    int terminal_pid,
+    string body,
+    string fallback_title
+  ) {
+    var window = this.find_terminal_window (terminal_pid);
+    if (window == null) {
+      return;
+    }
+
+    var notification = new GLib.Notification (
+      window.terminal_title_for_pid (terminal_pid)
+        ?? fallback_title
+    );
+    notification.set_body (body);
+    notification.set_priority (GLib.NotificationPriority.URGENT);
+    notification.set_default_action_and_target_value (
+      "app.focus-terminal",
+      new Variant.int32 (terminal_pid)
+    );
+    this.send_notification (
+      "codex-turn-%d".printf (terminal_pid),
+      notification
+    );
   }
 }

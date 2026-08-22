@@ -1,0 +1,21 @@
+{
+  "name": "blackbox-border-status",
+  "version": "0.1.0+codex.20260819120735",
+  "description": "Show Codex turn activity and completion notifications in the owning Black Box window.",
+  "author": {
+    "name": "Local developer"
+  },
+  "interface": {
+    "displayName": "Black Box Border Status",
+    "shortDescription": "Show Codex terminal activity and completion.",
+    "longDescription": "Pulses the owning Black Box window border while a Codex turn runs, marks completion in lime, and sends a notification that focuses the owning terminal window when clicked.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "Automation"
+    ],
+    "defaultPrompt": [
+      "Show Codex activity in Black Box."
+    ]
+  }
+}

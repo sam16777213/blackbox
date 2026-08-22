@@ -82,7 +82,7 @@ public class Terminal.TerminalTab : Gtk.Box {
       halign = Gtk.Align.FILL,
       valign = Gtk.Align.FILL,
       hscrollbar_policy = Gtk.PolicyType.NEVER,
-      vscrollbar_policy = Gtk.PolicyType.AUTOMATIC
+      vscrollbar_policy = Gtk.PolicyType.ALWAYS
     };
     this.scrolled.set_child (twig);
 

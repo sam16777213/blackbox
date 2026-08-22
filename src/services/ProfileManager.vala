@@ -82,7 +82,7 @@ namespace Terminal {
     public signal void profile_renamed (string old_name, string new_name);
     public signal void profile_deleted (string deleted_name, string fallback_name);
 
-    public string active_profile_name {
+    public string startup_profile_name {
       get { return this._active_profile_name; }
     }
 
@@ -143,25 +143,17 @@ namespace Terminal {
       return this.get_profile_index (profile_name) >= 0;
     }
 
-    public bool set_active_profile (string profile_name) {
+    public bool set_startup_profile (string profile_name) {
       if (!this.has_profile (profile_name)) {
         return false;
       }
 
-      if (
-        profile_name == this._active_profile_name &&
-        profile_name == this._session_profile_name
-      ) {
+      if (profile_name == this._active_profile_name) {
         return true;
       }
 
-      this.capture_session_profile_state ();
       this._active_profile_name = profile_name;
-      this._session_profile_name = profile_name;
-      this.apply_session_profile ();
       this.save_profiles ();
-
-      this.active_profile_changed (this._session_profile_name);
       this.profiles_changed ();
 
       return true;
@@ -176,7 +168,9 @@ namespace Terminal {
         return true;
       }
 
+      this.capture_session_profile_state ();
       this._session_profile_name = profile_name;
+      this.apply_session_profile ();
       this.active_profile_changed (this._session_profile_name);
 
       return true;

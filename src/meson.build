@@ -46,6 +46,7 @@ endif
 blackbox_deps = [
   dependency('gio-2.0', version: '>= 2.50', static: static_link),
   dependency('gtk4', version: '>= 4.6.2', static: static_link),
+  dependency('gtk4-x11', version: '>= 4.6.2', static: static_link),
   # Black Box actually depends on libadwaita >= 1.2.alpha, but I'm keeping this
   # at 1.1 to make it easier for translators to work on Black Box
   dependency('libadwaita-1', version: '>= 1.1', static: static_link),
